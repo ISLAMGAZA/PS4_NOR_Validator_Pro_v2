@@ -17,6 +17,20 @@ Advanced PS4 NOR dump analysis, validation, repair, and downgrade tool.
 - **Keys Extractor** — Console identity and encryption keys
 - **SLB2 Rebuilder** — Secure boot partition repair
 
+## Screenshots
+
+| Main Menu | Hybrid Auto-Repair v2.1 |
+|:---:|:---:|
+| ![Main Menu](screenshots/main_menu.png) | ![Hybrid Repair](screenshots/hybrid_repair.png) |
+
+| HDD/NVS Analyzer | Syscon Damage Analysis |
+|:---:|:---:|
+| ![HDD Analyzer](screenshots/hdd_analyzer.png) | ![Syscon Analysis](screenshots/syscon_analysis.png) |
+
+| Downgrade Assistant | Smart Donor Matching |
+|:---:|:---:|
+| ![Downgrade Assistant](screenshots/downgrade_assistant.png) | ![Donor Match](screenshots/donor_match.png) |
+
 ## Quick Start
 
 ```
