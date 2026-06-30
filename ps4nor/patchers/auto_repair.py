@@ -400,13 +400,28 @@ class AutoRepair:
         cid_repairs = nvsp.repair_cid()
         unk_repairs = nvsp.repair_unk_blocks()
 
-        # Handle healthy-but-differing mirrors — force-sync primary to mirror
+        # Handle differing or half-corrupt mirrors — always sync healthy -> corrupt
         syncs = []
-        for name, m in [("1CA", "1CD"), ("1C9", "1CC")]:
+        for name, mirror in [("1CA", "1CD"), ("1C9", "1CC")]:
             i = info.get(name)
-            if i and not i["empty"] and i["healthy"] and i["match_pct"] < 100:
-                r = nvsp.sync_cid(name, m)
-                syncs.append(f"  CID {name}/{m}: SYNCED ({name} -> {m})")
+            im = info.get(mirror)
+            if not i or not im:
+                continue
+
+            # Both have data but differ — sync primary to mirror
+            if not i["empty"] and not im["empty"] and i["healthy"] and im["healthy"] and i["match_pct"] < 100:
+                r = nvsp.sync_cid(name, mirror)
+                syncs.append(f"  CID {name}/{mirror}: SYNCED ({name} -> {mirror})")
+                self.repair_count += 1
+            # Primary healthy, mirror empty/unhealthy — restore mirror
+            elif not i["empty"] and i["healthy"] and (im["empty"] or not im["healthy"]):
+                r = nvsp.sync_cid(name, mirror)
+                syncs.append(f"  CID {mirror}: RESTORED from {name}")
+                self.repair_count += 1
+            # Mirror healthy, primary empty/unhealthy — restore primary
+            elif not im["empty"] and im["healthy"] and (i["empty"] or not i["healthy"]):
+                r = nvsp.sync_cid(mirror, name)
+                syncs.append(f"  CID {name}: RESTORED from {mirror}")
                 self.repair_count += 1
 
         for r in syncs:
