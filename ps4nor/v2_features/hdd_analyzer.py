@@ -169,6 +169,7 @@ def analyze_hdd_metadata(nor_data: bytes) -> Dict:
         'healthy': False,
         'mirror_synced': False,
         'warnings': [],
+        'notes': [],
         'recommendations': [],
         'console_serial': None,
         'keys_valid': False,
@@ -221,8 +222,7 @@ def analyze_hdd_metadata(nor_data: bytes) -> Dict:
     result['mirror_synced'] = meta1 == meta2
 
     if not result['mirror_synced'] and h1_healthy and h2_healthy:
-        result['warnings'].append('HDD metadata copies differ — sync needed')
-        result['recommendations'].append('Sync mirror from primary or vice versa')
+        result['notes'].append('HDD metadata copies differ — both healthy, likely HDD change')
     elif not h1_healthy and h2_healthy:
         result['warnings'].append('HDD metadata primary (0x1C5000) corrupt')
         result['recommendations'].append('Restore primary from mirror')
@@ -236,16 +236,26 @@ def analyze_hdd_metadata(nor_data: bytes) -> Dict:
     # Check CID_CRC vs mirror
     cid_crc = nvs[OFF_CID_CRC:OFF_CID_CRC + 0x1000]
     cid_crc_mir = nvs[OFF_CID_CRC_MIR:OFF_CID_CRC_MIR + 0x1000]
+    cid_crc_h1 = sum(1 for b in cid_crc if b not in (0, 0xFF)) > 32
+    cid_crc_h2 = sum(1 for b in cid_crc_mir if b not in (0, 0xFF)) > 32
     if cid_crc != cid_crc_mir:
-        result['warnings'].append('CID CRC (0x1C9000) ≠ mirror (0x1CC000)')
-        result['recommendations'].append('Sync CID CRC mirror from primary')
+        if cid_crc_h1 and cid_crc_h2:
+            result['notes'].append('CID CRC (0x1C9000) differs from mirror (0x1CC000) — both healthy')
+        else:
+            result['warnings'].append('CID CRC (0x1C9000) or mirror (0x1CC000) corrupt')
+            result['recommendations'].append('Sync CID CRC from healthy side')
 
     # Check CID vs mirror
     cid = nvs[OFF_CID:OFF_CID + 0x1000]
     cid_mir = nvs[OFF_CID_MIR:OFF_CID_MIR + 0x1000]
+    cid_h1 = sum(1 for b in cid if b not in (0, 0xFF)) > 32
+    cid_h2 = sum(1 for b in cid_mir if b not in (0, 0xFF)) > 32
     if cid != cid_mir:
-        result['warnings'].append('CID (0x1CA000) ≠ mirror (0x1CD000)')
-        result['recommendations'].append('Sync CID mirror from primary')
+        if cid_h1 and cid_h2:
+            result['notes'].append('CID (0x1CA000) differs from mirror (0x1CD000) — both healthy')
+        else:
+            result['warnings'].append('CID (0x1CA000) or mirror (0x1CD000) corrupt')
+            result['recommendations'].append('Sync CID from healthy side')
 
     # Extract console serial from 0x1C8000 region
     serial_region = nor_data[NVS_START + OFF_SERIAL:NVS_START + OFF_SERIAL + 0x1000]
@@ -533,6 +543,11 @@ def format_hdd_report(analysis: Dict) -> str:
         r = analysis['nvs_subregions'][off]
         status_label = ok('OK') if r['healthy'] else fail('CORRUPT')
         lines.append(f'  0x{NVS_START + off:05X} ({r["name"]:20s}): {status_label}  ({r["non_zero"]:4d} bytes, entropy {r["entropy"]:.2f})')
+
+    if analysis.get('notes'):
+        lines.append(f'\n  {dim("Notes:")}')
+        for n in analysis['notes']:
+            lines.append(f'    {dim("-")} {n}')
 
     if analysis['warnings']:
         lines.append(f'\n  {warn("Warnings:")}')

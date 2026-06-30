@@ -1824,6 +1824,81 @@ def syscon_analyze_repair():
 
 
 # ======================================================================
+# FEATURE: SYSCON-NOR MATCHER
+# ======================================================================
+
+def syscon_nor_matcher():
+    _header('SYSCON ↔ NOR MATCHER')
+    if not _load_dump():
+        return
+
+    import hashlib
+    from ps4nor.v2_features.syscon_fw_db import match_syscon_to_nor
+    from ps4nor.utils.helpers import detect_sku, detect_fw_version
+
+    # Extract NOR identity
+    board_id = _current_dump[0x1C4000:0x1C4008].hex() if len(_current_dump) > 0x1C4008 else 'N/A'
+    sku = detect_sku(_current_dump) or 'Unknown'
+    fw = detect_fw_version(_current_dump) or 'Unknown'
+    eap = _current_dump[0x0C4000:0x144000] if len(_current_dump) > 0x144000 else b''
+    eap_md5 = hashlib.md5(eap).hexdigest() if eap else ''
+
+    nor_name = os.path.basename(_current_path) if _current_path else ''
+    print(f'  NOR: {head(nor_name)}')
+    print(f'  SKU: {value(sku)}')
+    print(f'  FW:  {value(fw)}')
+    print(f'  Board ID: {value(board_id)}')
+    print()
+
+    nor_info = {
+        'board_id': board_id, 'sku': sku, 'fw': fw,
+        'eap_md5': eap_md5, '_path': _current_path or '',
+    }
+
+    results = match_syscon_to_nor(nor_info, SYSCON_DONORS_DIR)
+
+    if not results:
+        print(f'  {warn("No matching syscon donors found.")}')
+        return
+
+    label = info('Top 10 syscon matches:')
+    print('  ' + label)
+    h_row = '  {:<25} {:>6} {:>4} {:<14} {:<30}'.format('File', 'Score', 'ARV', 'Chip', 'Reason')
+    sep = dim('-' * 85)
+    print(h_row)
+    print(sep)
+    for r in results:
+        if r['score'] >= 10:
+            fn = head(r['filename'])
+            sc = value(str(r['score']))
+            arv = str(r['arv'])
+            chip = r['chip']
+            reason = dim(r['match_reason'])
+            print('  {:<25} {:>6} {:>4} {:<14} {:<30}'.format(fn, sc, arv, chip, reason))
+    print(sep)
+    print()
+
+    # Try to find the best match file
+    best = None
+    for r in results:
+        spath = os.path.join(SYSCON_DONORS_DIR, r['filename'])
+        if os.path.exists(spath):
+            best = spath
+            break
+
+    if best:
+        ok_msg = ok('Best match available:')
+        print('  ' + ok_msg + ' ' + head(os.path.basename(best)))
+        prompt = info('Copy best syscon to dumps/?')
+        if input('  ' + prompt + ' (y/n): ').strip().lower() == 'y':
+            import shutil
+            out = os.path.join(DUMPS_DIR, os.path.basename(best))
+            shutil.copy2(best, out)
+            copied = ok('Copied:')
+            print('  ' + copied + ' ' + value(out))
+
+
+# ======================================================================
 # MENU
 # ======================================================================
 
@@ -1855,6 +1930,7 @@ def main_menu():
         print()
         print(f'  {info("S.")} Smart Donor Match')
         print(f'  {info("K.")} Donor List')
+        print(f'  {info("T.")} Syscon↔NOR Matcher  (match paired dumps)')
         print(f'  {info("B.")} Rebuild Donor/Blob Database')
         print()
         print(f'  {title("=== AND MORE ===")}')
@@ -1892,6 +1968,8 @@ def main_menu():
         elif choice == 'l':
             _current_path = None
             _load_dump()
+        elif choice == 't':
+            syscon_nor_matcher()
         elif choice == 'b':
             rebuild_db()
         elif choice == '0':

@@ -1230,3 +1230,112 @@ def format_syscon_report(syscon_data: bytes) -> str:
             lines.append(f'    {e["type"]} @ {e["offset"]}: cnt={e["counter"]} data={e["data"]}')
     lines.append('=' * 60)
     return '\n'.join(lines)
+
+
+def match_syscon_to_nor(nor_md5s: dict, syscon_donors_dir: str = None) -> dict:
+    """
+    Match a NOR dump to the best syscon donor using:
+    1. Board ID match
+    2. Chip type (from SKU)
+    3. ARV range
+    4. EAP_KBL MD5
+
+    Args:
+        nor_md5s: dict of {'board_id': str, 'sku': str, 'fw': str, 'eap_md5': str}
+        syscon_donors_dir: Path to syscon_donors/ directory
+
+    Returns:
+        [{'filename': str, 'score': float, 'match_reason': str, 'arv': int}, ...]
+    """
+    from ..utils.arv_map import DONOR_MD5_MAP
+    results = []
+
+    board_id = nor_md5s.get('board_id', '')
+    sku = nor_md5s.get('sku', '')
+    fw_str = nor_md5s.get('fw', '')
+    eap_md5 = nor_md5s.get('eap_md5', '')
+
+    # Determine chip from SKU
+    chip = 'CXD90044G'
+    if sku:
+        try:
+            model_num = int(re.search(r'(\d+)', sku).group(1))
+            if model_num < 12:
+                chip = 'CXD90025G'
+            elif model_num < 70:
+                chip = 'CXD90044G'
+            else:
+                chip = 'CXD90068G'
+        except:
+            pass
+
+    # Parse FW as number for comparison
+    fw_num = 0.0
+    try:
+        fw_num = float(fw_str.split('<')[0].split('-')[0].strip())
+    except:
+        pass
+
+    # Score all donors
+    for md5, info in DONOR_MD5_MAP.items():
+        score = 0.0
+        reasons = []
+        d_chip = info.get('chip', '')
+        d_arv = info.get('arv', -1)
+        d_file = info.get('file', '')
+
+        # Chip match (weight 40)
+        if d_chip == chip:
+            score += 40
+            reasons.append(f'chip={chip}')
+
+        # Board ID partial match from filename (weight 20)
+        # If filename starts with same k-number pattern, it's likely same device
+        d_file_base = os.path.splitext(d_file)[0].split('-')[0].replace('k', '')
+        nor_base = os.path.basename(nor_md5s.get('_path', '')).split('.')[0].split('-')[0].replace('k', '')
+        if d_file_base and nor_base and d_file_base == nor_base:
+            score += 20
+            reasons.append('same k-number')
+
+        # ARV check (weight 30) — prefer donors whose ARV maps to this FW
+        if d_arv >= 0 and fw_str:
+            from arv_fw_map import ARV_FW_MAP
+            fws = ARV_FW_MAP.get((d_chip, d_arv), [])
+            if fw_str in fws:
+                score += 30
+                reasons.append(f'ARV={d_arv} maps to FW {fw_str}')
+            elif fws:
+                # Close FW version
+                for f in fws:
+                    try:
+                        f_fw = float(f.split('<')[0].split('-')[0].strip())
+                        if abs(f_fw - fw_num) < 0.1:
+                            score += 15
+                            reasons.append(f'ARV={d_arv} close FW {f}')
+                            break
+                    except:
+                        pass
+
+        # EAP_KBL MD5 match (weight 10)
+        if eap_md5:
+            try:
+                sc_data = open(os.path.join(syscon_donors_dir or '', d_file), 'rb').read()
+                if len(sc_data) >= 0x60000:
+                    sc_eap = hashlib.md5(sc_data[:0x60000]).hexdigest()
+                    if sc_eap[:16] == eap_md5[:16]:
+                        score += 10
+                        reasons.append('EAP match')
+            except:
+                pass
+
+        results.append({
+            'filename': d_file,
+            'md5': md5,
+            'score': round(score, 1),
+            'match_reason': ', '.join(reasons),
+            'arv': d_arv,
+            'chip': d_chip,
+        })
+
+    results.sort(key=lambda x: -x['score'])
+    return results[:10]
