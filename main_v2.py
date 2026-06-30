@@ -1401,8 +1401,65 @@ def syscon_rebuild():
     print(f'  {info("2.")} WeeTools Rebuild (keep same FW, clean SNVS)')
     print(f'  {info("3.")} Full rebuild from NOR (damaged syscon, uses ARV→FW mapping)')
     print(f'  {info("4.")} Analyze & Repair Corrupted Syscon (standalone)')
+    print(f'  {info("5.")} Syscon FW Recovery (copy donor firmware, preserve SNVS)')
     print()
-    mode = input(f'  {info("Choice")} (1/2/3/4): ').strip()
+    mode = input(f'  {info("Choice")} (1/2/3/4/5): ').strip()
+
+    if mode == '5':
+        _header('SYSCON FW RECOVERY')
+        print(f'  {info("Copies firmware from donor syscon, preserves SNVS from damaged syscon.")}')
+        print()
+
+        # Get target syscon (damaged one)
+        if not _current_dump:
+            print(f'  {warn("No NOR dump loaded. Load one first (L).")}')
+            return
+
+        target_syscon = _load_syscon()
+        if not target_syscon:
+            print(f'  {fail("Cannot extract Syscon from loaded dump.")}')
+            return
+
+        print(f'  {ok("Target syscon extracted from loaded NOR dump.")}')
+
+        # Browse for donor syscon file
+        print(f'  {info("Now select the donor syscon file...")}')
+        donor_path = browse_file('Donor syscon (*.bin)', SYSCON_DONORS_DIR)
+        if not donor_path:
+            print(f'  {warn("No donor selected.")}')
+            return
+
+        try:
+            with open(donor_path, 'rb') as f:
+                donor_syscon = f.read()
+        except Exception as e:
+            print(f'  {fail(f"Error reading donor: {e}")}')
+            return
+
+        if len(donor_syscon) not in (0x40000, 0x80000):
+            print(f'  {fail(f"Invalid donor size: {len(donor_syscon)} bytes (expected 256KB or 512KB)")}')
+            return
+
+        print(f'  {ok("Donor:")} {head(os.path.basename(donor_path))} {dim(f"({len(donor_syscon)//1024}KB)")}')
+
+        from ps4nor.v2_features.syscon_regen import syscon_fw_recovery
+        result, report = syscon_fw_recovery(target_syscon, donor_syscon)
+        if result is None:
+            print(f'  {fail(f"Recovery failed: {report}")}')
+            return
+
+        for line in report.split('\n'):
+            print(f'  {line}')
+
+        # Save
+        out_dir = os.path.dirname(_current_path) if _current_path else DUMPS_DIR
+        base = os.path.splitext(os.path.basename(_current_path))[0]
+        out_path = os.path.join(out_dir, f'{base}_syscon_fw_recovered.bin')
+        with open(out_path, 'wb') as f:
+            f.write(result)
+        print(f'  {ok("Saved:")} {value(out_path)}')
+        print(f'  {ok("Done.")}')
+        return
 
     if mode == '4':
         syscon_analyze_repair()
@@ -1911,10 +1968,16 @@ def cli_mode(args: list):
 # ======================================================================
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1 and sys.argv[1] != '-i':
-        cli_mode(sys.argv[1:])
-    else:
-        if len(sys.argv) > 2:
-            _current_path = sys.argv[2]
-            _load_dump(sys.argv[2])
-        main_menu()
+    try:
+        if len(sys.argv) > 1 and sys.argv[1] != '-i':
+            cli_mode(sys.argv[1:])
+        else:
+            if len(sys.argv) > 2:
+                _current_path = sys.argv[2]
+                _load_dump(sys.argv[2])
+            main_menu()
+    except Exception as e:
+        import traceback
+        print(f'\n  ERROR: {e}')
+        traceback.print_exc()
+        input('\n  Press Enter to exit...')

@@ -737,6 +737,46 @@ def syscon_rebuild_from_nor(nor_data, syscon_data, fws_dir=None, donors_dir=None
     return bytes(result), '\n'.join(report)
 
 
+def syscon_fw_recovery(target_syscon, donor_syscon):
+    """
+    Recover syscon firmware from a donor chip (WeeTools PRO: option 5 in Syscon Additional Tools).
+    Copies the firmware area (0x000-0x60000) from donor to target, preserving the target's SNVS.
+
+    Args:
+        target_syscon: Damaged syscon with intact SNVS but corrupted firmware
+        donor_syscon: Healthy syscon from same chip/ARV range
+
+    Returns:
+        (recovered_bytes, report_string) or (None, error_string)
+    """
+    report = []
+    for name, data in [('Target', target_syscon), ('Donor', donor_syscon)]:
+        if len(data) not in VALID_SIZES:
+            return None, f'{name} has invalid size: {len(data)} bytes'
+
+    # Quick compatibility check: firmware area should have vectors
+    from ..v2_features.syscon_analyzer import _check_firmware
+    donor_fw = _check_firmware(donor_syscon)
+    if not donor_fw['healthy']:
+        return None, f'Donor firmware is damaged ({donor_fw["detail"]})'
+    target_fw = _check_firmware(target_syscon)
+    report.append(f'Target FW: {target_fw["detail"]}')
+    report.append(f'Donor FW:  {donor_fw["detail"]}')
+
+    # Build result: donor firmware area + target SNVS area
+    result = bytearray(donor_syscon[:FW_AREA_SIZE]) + bytearray(target_syscon[FW_AREA_SIZE:])
+
+    # Verify result size
+    if len(result) != len(target_syscon):
+        return None, f'Size mismatch: result={len(result)} target={len(target_syscon)}'
+
+    report.append(f'Copied firmware area from donor ({FW_AREA_SIZE//1024}KB)')
+    report.append(f'Preserved SNVS from target ({len(target_syscon) - FW_AREA_SIZE} bytes)')
+    report.append('Syscon FW recovery complete')
+
+    return bytes(result), '\n'.join(report)
+
+
 def syscon_light_repair(syscon_data):
     """
     Light repair — fix SNVS header and flatdata/entry consistency.
