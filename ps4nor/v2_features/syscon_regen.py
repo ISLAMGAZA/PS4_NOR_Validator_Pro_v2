@@ -342,17 +342,23 @@ def wee_rebuild(syscon_data, keep_types=None):
     report_parts = [f'Parsed {len(entries_by_type)} unique entry types from SNVS']
 
     # Step 2: Select entries for keep_types
+    # Only keep types that actually exist in the original data.
+    # If a keep_type doesn't exist, simply skip it — creating empty
+    # entries (all zeros) is worse than omitting them.
     selected = {}
     for typ in keep_types:
         if typ in entries_by_type:
             selected[typ] = entries_by_type[typ]
-        else:
-            # Type not found - create empty entry
-            selected[typ] = (0, b'\x00' * 8)
 
-    kept = len(selected)
-    skipped = len(entries_by_type) - kept
-    report_parts.append(f'Kept {kept} types, skipped {max(0, skipped)} types')
+    # If no keep_type matched, fall back to keeping all available types
+    if not selected and entries_by_type:
+        for typ in sorted(entries_by_type.keys())[:16]:
+            selected[typ] = entries_by_type[typ]
+        report_parts.append(f'No standard types found; kept {len(selected)} best-match types as fallback')
+    else:
+        kept = len(selected)
+        skipped = len(entries_by_type) - kept
+        report_parts.append(f'Kept {kept} types, skipped {max(0, skipped)} types')
 
     # Step 3: Build new SNVS
     # WeeTools pattern:
@@ -561,9 +567,16 @@ def _find_target_arv(nor_data, syscon_data, chip_type):
     4. Fallback to ARV=0
     """
     def _scan_arv(start_area, end_area):
-        """Scan PRE0 entries in given area range, return (arv, ctr) or (-1, -1)."""
-        highest_arv = -1
-        highest_ctr = -1
+        """Scan PRE0 entries in given area range, return (arv, ctr) or (-1, -1).
+        Checks multiple possible PRE0 type values (standard 0x0C and common
+        non-standard variants like 0x1B observed in some syscon formats).
+        Prefers type 0x0C (standard) over non-standard types."""
+        best_arv = -1
+        best_ctr = -1
+        best_typ = -1
+        # PRE0 can appear at different byte1 values depending on syscon format.
+        # Standard WeeTools: type 0x0C. Some OEM formats: type 0x1B.
+        pre0_types = {0x0C, 0x1B, 0x14, 0x18}
         for area_n in range(start_area, end_area):
             astart = SNVS_OFF + 0x800 + area_n * AREA_SIZE
             for i in range(0x400, AREA_SIZE, 16):
@@ -574,10 +587,14 @@ def _find_target_arv(nor_data, syscon_data, chip_type):
                 if raw[0] == 0xA5 and raw[7] == 0xC3:
                     typ = raw[1] | (raw[2] << 8)
                     ctr = raw[4] | (raw[5] << 8) | (raw[6] << 16)
-                    if typ == 0x0C and ctr > highest_ctr:
-                        highest_ctr = ctr
-                        highest_arv = raw[8]  # data[0] = ARV
-        return highest_arv, highest_ctr
+                    if typ in pre0_types:
+                        # Prioritize standard type 0x0C over non-standard variants
+                        if best_arv < 0 or ctr > best_ctr:
+                            if best_arv < 0 or best_typ != 0x0C or typ == 0x0C:
+                                best_ctr = ctr
+                                best_arv = raw[8]
+                                best_typ = typ
+        return best_arv, best_ctr
 
     # Method 1: Extract ARV from PRE0 entries in Areas 0-7 (current SNVS)
     try:
@@ -845,10 +862,44 @@ def syscon_auto_repair(syscon_data, nor_data=None, syscon_donors_dir=None):
         report.append('Applying Medium Repair (WeeTools Rebuild)...')
         result, sub_report = wee_rebuild(syscon_data)
         if result is not None:
-            # Also fix the missing core types from WeeTools output
-            result, sub_report2 = syscon_generate_snvs(result, None, 0)
-            if result:
-                sub_report += '\n' + sub_report2
+            # After WeeTools, check how many entries we have
+            entry_count = 0
+            for i in range(320):
+                off = 0x60C00 + i * 16
+                if off + 16 > len(result): break
+                if result[off] != 0xA5: break
+                entry_count += 1
+            report.append(f'WeeTools produced {entry_count} entries')
+
+            # If we're missing core types (0x00-0x07), use generate_snvs but
+            # preserve any existing data from WeeTools output
+            if entry_count < 12:
+                report.append('Missing core types detected — generating defaults...')
+                import copy
+                gen_bytes, sub_report2 = syscon_generate_snvs(bytes(result), None, 0)
+                if gen_bytes:
+                    gen = bytearray(gen_bytes)
+                    # Merge: copy WeeTools-generated data into the full SNVS
+                    for i in range(320):
+                        off_wee = 0x60C00 + i * 16
+                        if off_wee + 16 > len(result): break
+                        wee_entry = bytes(result)[off_wee:off_wee+16]
+                        if wee_entry[0] != 0xA5: break
+                        wee_typ = wee_entry[1] | (wee_entry[2] << 8)
+
+                        # Find same type in generate output and copy data
+                        for j in range(320):
+                            off_gen = 0x60C00 + j * 16
+                            if off_gen + 16 > len(gen): break
+                            gen_entry = gen[off_gen:off_gen+16]
+                            if gen_entry[0] != 0xA5: break
+                            gen_typ = gen_entry[1] | (gen_entry[2] << 8)
+                            if gen_typ == wee_typ:
+                                gen[off_gen + 8:off_gen + 16] = wee_entry[8:16]
+                                break
+
+                    result = bytes(gen)
+                    sub_report += '\n' + sub_report2
 
     elif level == 3:
         # Heavy: SNVS regeneration with ARV
