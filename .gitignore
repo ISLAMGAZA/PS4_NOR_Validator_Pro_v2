@@ -1,0 +1,26 @@
+# Project-specific
+donors/
+syscon_donors/
+fws/
+dumps/
+revert/
+dist2/
+build/
+test/
+wee/
+*.spec
+*.exe
+*.backup
+arv_db.csv
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Cache
+.donor_cache.json
+
+# IDE
+.vscode/
+.idea/
