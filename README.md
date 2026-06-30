@@ -55,8 +55,13 @@ main_v2.py <dump.bin> [command]
 
 GPL-3.0 — Open source. Contributions welcome.
 
-## Notes
+## Important Notes
 
+- **The EXE does NOT bundle donor/NOR/firmware files.** You must place the following folders alongside the EXE:
+  - `donors/` — NOR donor dumps
+  - `syscon_donors/` — Syscon donor dumps
+  - `fws/` — FW blob database
+  - `revert/` — User revert dumps
 - Always keep backups of your original NOR dump
 - Console identity (Board ID, MAC, Serial, CID) is preserved during repair
 - This is a community tool with no affiliation to Sony Interactive Entertainment
