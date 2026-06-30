@@ -1834,6 +1834,7 @@ def main_menu():
         print(hr(color='cyan'))
         print(f'  {brand("PS4 NOR VALIDATOR PRO v" + __version__ + " - ADVANCED FEATURES")}')
         print(f'  {dim("by ISLAM JAMEL")}')
+        print(f'  {dim("github.com/ISLAMGAZA/PS4_NOR_Validator_Pro_v2")}')
         print(hr(color='cyan'))
         dump_name = os.path.basename(_current_path) if _current_path else "(none)"
         print(f'  {info("Dump:")} {value(dump_name)}')

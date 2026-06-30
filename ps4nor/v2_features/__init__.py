@@ -135,5 +135,5 @@ __all__ = [
     'HybridRepairV21',
 ]
 
-__version__ = '2.1.0'
+__version__ = '2.2.0'
 __author__ = 'PS4 NOR Validator Pro Team'

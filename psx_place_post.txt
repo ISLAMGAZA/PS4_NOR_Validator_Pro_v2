@@ -1,0 +1,43 @@
+Title: [RELEASE] PS4 NOR Validator Pro v2 - Open Source NOR Dump Analysis, Repair & Downgrade Assistant
+
+Body:
+
+PS4 NOR Validator Pro v2 is an open-source tool for analyzing, repairing, and downgrading PS4 NOR dumps.
+
+Project in early development - feedback and contributions welcome!
+
+? GitHub: https://github.com/ISLAMGAZA/PS4_NOR_Validator_Pro_v2
+? Download EXE (portable): https://github.com/ISLAMGAZA/PS4_NOR_Validator_Pro_v2/releases/tag/v2.1.0
+
+? KEY FEATURES
+
+• Hybrid Auto-Repair v2.1 - 4-pass: FW Blob + Same-FW Donor + Cross-Donor + Byte-Level patching with console identity protection
+• Syscon Damage Analysis & Auto-Repair - 4 severity levels with graduated repair
+• Syscon Regeneration - WeeTools rebuild (0-diff verified), donor-based, from-scratch SNVS
+• HDD/NVS Analyzer - 9 sub-regions (Board ID, MAC, Serial, CID, HDD metadata)
+• Downgrade Assistant - CORE_SWCH flip, UART enable, EAP_KBL replacement, Syscon SNVS patch
+• NVS Regeneration - 3 methods (Accurate Bytes, Blind Copy, Combined) with Board ID filtering
+• Smart Donor Matching - Weighted scoring by SKU/model/region/FW
+• ARV-to-FW Mapping - 207 entries from 380 paired dumps
+• Keys Extractor - Console identity and encryption keys
+
+? QUICK USAGE
+
+Run the EXE directly (Windows) or use Python:
+
+main_v2.py (Interactive Menu)
+main_v2.py dump.bin (CLI mode)
+
+Menu: L=Load, E=Hybrid Repair, H=HDD Analyzer, V=Downgrade Assistant, C=Syscon Regen
+
+? REQUIREMENTS
+
+Donor NOR dumps in donors/ folder
+Syscon donor dumps in syscon_donors/ folder
+FW blob database in fws/ folder
+
+? LICENSE
+
+GPL-3.0 - Open source
+
+Always keep backups of your original NOR dump.
