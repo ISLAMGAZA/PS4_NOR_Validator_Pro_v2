@@ -133,6 +133,14 @@ The following are **not bundled** with the EXE:
 - [Flask](https://flask.palletsprojects.com/) — Web UI (upcoming)
 - [WeeTools PRO](https://github.com/andy-man/ps4-wee-tools) — Reference implementation
 
+## Support the Project
+
+If you find this tool useful, consider supporting development:
+
+[![PayPal](https://img.shields.io/badge/Donate-PayPal-00457C.svg?logo=paypal)](https://paypal.me/islamjamelak)
+
+Your support helps maintain servers, acquire test dumps, and improve the tool.
+
 ## License
 
 **GPL-3.0** — Open source. Contributions welcome.
