@@ -10,13 +10,13 @@
 <div class="container">
   <header>
     <div class="logo">
-      <span class="logo-icon">⚡</span>
+      <div class="logo-icon">⚡</div>
       <div>
         <h1>PS4 <span class="accent">Repair Agent</span></h1>
-        <p class="subtitle">AI-Assisted NOR & Syscon Diagnostics</p>
+        <p class="subtitle">AI-Assisted NOR &middot; Syscon &middot; Diagnostics</p>
       </div>
     </div>
-    <div class="version">v2.2.1</div>
+    <div class="header-badge">v2.2.1</div>
   </header>
 
   <div class="chat-container" id="chatContainer">
@@ -24,43 +24,44 @@
       <div class="msg msg-ai">
         <div class="msg-avatar">🤖</div>
         <div class="msg-content">
-          <p>مرحباً بك في <strong>PS4 Repair Agent</strong> 🎮</p>
-          <p>أنا هنا لمساعدتك في تشخيص مشاكل جهاز PS4 الخاص بك.</p>
-          <p>📁 أرسل لي ملف <strong>NOR dump</strong> (32MB .BIN) للبدء، أو أخبرني عن مشكلتك.</p>
+          <p>✨ Welcome to <strong>PS4 Repair Agent</strong> 🎮</p>
+          <p>I help diagnose and repair NOR &amp; Syscon dumps from PlayStation 4 consoles.</p>
+          <p style="margin-top:10px">📁 <strong>Drop your NOR dump</strong> (32MB .BIN) above to get started,<br>or type a question below.</p>
         </div>
       </div>
     </div>
   </div>
 
-  <div class="upload-area" id="uploadArea">
-    <div class="upload-row">
-      <span class="upload-label">📀 NOR:</span>
-      <span class="upload-status" id="norStatus">لم يتم الرفع</span>
+  <div class="upload-bar" id="uploadBar">
+    <div class="upload-item">
+      <span class="upload-icon">📀</span>
+      <span class="upload-label">NOR:</span>
+      <span class="upload-status waiting" id="norUpload">⏳ Drop .BIN here</span>
     </div>
-    <div class="upload-row">
-      <span class="upload-label">🧩 Syscon:</span>
-      <span class="upload-status" id="sysconStatus">لم يتم الرفع</span>
+    <div class="upload-item">
+      <span class="upload-icon">🧩</span>
+      <span class="upload-label">Syscon:</span>
+      <span class="upload-status waiting" id="sysconUpload">⏳ Optional (256K)</span>
     </div>
   </div>
+  <input type="file" id="fileInput" multiple accept=".bin,.BIN,.nor,.NOR" style="display:none">
 
   <div class="input-area">
-    <input type="file" id="fileInput" multiple style="display:none" accept=".bin,.BIN">
     <div class="input-row">
-      <input type="text" class="chat-input" id="chatInput"
-             placeholder="اكتب رسالتك هنا... أو اسحب ملفات للتحليل"
-             autofocus>
-      <button class="btn-send" id="btnSend">➤</button>
+      <input type="text" class="chat-input" id="chatInput" placeholder="Type your message here..." autofocus>
+      <button class="btn-send" id="btnSend">⟫</button>
     </div>
     <div class="input-hints">
-      <span class="hint" data-msg="سلام">👋 مرحبا</span>
-      <span class="hint" data-msg="ما سبب البلوتوث؟">📡 بلوتوث</span>
-      <span class="hint" data-msg="كيف أصلح البلوليت؟">🔵 بلو لايت</span>
-      <span class="hint" data-msg="شكرا">❤️ شكرا</span>
+      <span class="hint" data-msg="السلام عليكم">👋 Hello</span>
+      <span class="hint" data-msg="كيف أصلح البلوتوث؟">📡 Bluetooth</span>
+      <span class="hint" data-msg="ما سبب بلو لايت؟">🔵 Blue light</span>
+      <span class="hint" data-msg="ما هو وضع الـ debug؟">🔧 Debug</span>
+      <span class="hint" data-msg="شكرا">❤️ Thanks</span>
     </div>
   </div>
 
   <footer>
-    <p>by <strong>ISLAMGAZA</strong> &mdash; <a href="https://github.com/ISLAMGAZA/PS4_NOR_Validator_Pro_v2" target="_blank">GitHub</a> &mdash; <a href="https://paypal.me/islamjamelak" target="_blank">﷽</a></p>
+    <p>by <strong>ISLAMGAZA</strong> &middot; <a href="https://github.com/ISLAMGAZA/PS4_NOR_Validator_Pro_v2" target="_blank">GitHub</a> &middot; <a href="https://paypal.me/islamjamelak" target="_blank">Support</a></p>
   </footer>
 </div>
 

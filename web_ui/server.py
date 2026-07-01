@@ -152,6 +152,15 @@ def chat():
     result = agent.process_message(msg, files)
     return jsonify(result)
 
+@app.route('/fix', methods=['POST'])
+def fix():
+    variant = request.json.get('variant', 'V1')
+    agent = get_agent()
+    if agent.state.syscon_data is None:
+        return jsonify({'response': '<p style="color:var(--red)">❌ No Syscon data loaded.</p>'})
+    result = agent._apply_fix(variant)
+    return jsonify({'response': result})
+
 def main(port=5050):
     print(f'  PS4 Repair Agent — http://localhost:{port}')
     webbrowser.open(f'http://localhost:{port}')

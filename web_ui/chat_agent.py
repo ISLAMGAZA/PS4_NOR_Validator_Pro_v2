@@ -1,8 +1,8 @@
 """
-PS4 Repair Chat Agent — conversational AI for NOR/Syscon diagnostics.
+PS4 Repair Chat Agent — conversational diagnostics & repair.
 """
 
-import os, re, json
+import os, re, json, hashlib
 from typing import Optional, Dict, List, Any
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -24,6 +24,13 @@ class ConversationState:
     def reset(self):
         self.__init__()
 
+def _bold(t): return f'**{t}**'
+def _code(t): return f'`{t}`'
+def _badge(t, kind='ok'):
+    return f'<span class="stat-badge {kind}">{t}</span>'
+def _stat(label, value):
+    return f'<div class="stat-row"><span class="stat-label">{label}</span><span class="stat-value">{value}</span></div>'
+
 class PS4ChatAgent:
     def __init__(self):
         self.state = ConversationState()
@@ -31,7 +38,7 @@ class PS4ChatAgent:
     def process_message(self, msg: str, files: Dict[str, bytes] = None) -> Dict[str, Any]:
         if files:
             for name, data in files.items():
-                if len(data) == 0x2000000 and name.upper().endswith('.BIN'):
+                if len(data) == 0x2000000 and (name.upper().endswith('.BIN') or name.upper().endswith('.NOR')):
                     self.state.nor_data = data
                     self.state.nor_name = name
                     self._analyze_nor()
@@ -42,20 +49,16 @@ class PS4ChatAgent:
                     self._analyze_syscon()
                     self.state.step = 'syscon_loaded'
 
-        # Generate response based on state
         response = self._generate_response(msg)
         self.state.history.append({'role': 'user', 'content': msg})
         self.state.history.append({'role': 'assistant', 'content': response})
-
         return {
             'response': response,
             'state': self.state.step,
             'has_nor': self.state.nor_data is not None,
             'has_syscon': self.state.syscon_data is not None,
-            'nor_analysis': self.state.nor_analysis,
-            'syscon_analysis': self.state.syscon_analysis,
-            'diagnosis': self.state.diagnosis,
-            'history': self.state.history[-10:],
+            'nor_file': self.state.nor_name,
+            'syscon_file': self.state.syscon_name,
         }
 
     def _analyze_nor(self):
@@ -63,17 +66,12 @@ class PS4ChatAgent:
         self.state.nor_analysis = analyze_nor(self.state.nor_data)
 
     def _analyze_syscon(self):
-        from .server import analyze_syscon, get_arv
+        from .server import analyze_syscon, get_arv, diagnose
         self.state.syscon_analysis = analyze_syscon(self.state.syscon_data)
         arv = get_arv(self.state.syscon_data)
         self.state.syscon_analysis['arv'] = arv
-
-        # Run diagnosis
-        from .server import diagnose
         nor_info = self.state.nor_analysis or {}
         self.state.diagnosis = diagnose(nor_info, self.state.syscon_analysis)
-
-        # Run matching
         if self.state.nor_analysis:
             self._run_match()
 
@@ -89,150 +87,156 @@ class PS4ChatAgent:
         self.state.match_results = match_syscon_to_nor(
             ninfo, SYSCON_DONORS_DIR if os.path.isdir(SYSCON_DONORS_DIR) else None)
 
+    def _fmt_nor_card(self):
+        n = self.state.nor_analysis
+        if not n: return ''
+        h = 'ok' if n.get('healthy') else 'warn'
+        return ('<div class="stat-grid">'
+                + _stat('📀 Model', _bold(n.get('sku', '?')))
+                + _stat('🔢 FW Version', _bold(n.get('fw', '?')))
+                + _stat('🆔 Board ID', _code(n.get('board_id', '?')))
+                + _stat('📡 Active Slot', n.get('active_slot', '?'))
+                + _stat('🔌 MAC', _code(n.get('mac', 'N/A')))
+                + _stat('❤️ Overall', _badge('HEALTHY' if n.get('healthy') else 'CHECK', h))
+                + '</div>')
+
+    def _fmt_syscon_card(self):
+        s = self.state.syscon_analysis
+        if not s: return ''
+        sev = s.get('severity', 'none')
+        sev_badge = {'none': 'ok', 'minor': 'ok', 'moderate': 'warn', 'severe': 'fail', 'critical': 'fail'}.get(sev, 'warn')
+        return ('<div class="stat-grid">'
+                + _stat('🧩 Chip', _bold(s.get('chip', '?')))
+                + _stat('🎯 ARV', str(s.get('arv', -1)))
+                + _stat('💾 FW Area', _badge('OK' if s.get('fw_healthy') else 'DAMAGED', 'ok' if s.get('fw_healthy') else 'fail'))
+                + _stat('📋 Entries', str(s.get('valid_entries', 0)))
+                + _stat('⚠️ Severity', _badge(sev.capitalize(), sev_badge))
+                + _stat('🔴 Missing Types', ', '.join(f'0x{t:02X}' for t in s.get('missing_types', [])) or _badge('None', 'ok'))
+                + '</div>')
+
     def _generate_response(self, msg: str) -> str:
         msg_lower = msg.lower()
-        lines = []
         nor = self.state.nor_analysis
         sc = self.state.syscon_analysis
 
-        # Greeting / first message
-        if self.state.step == 'greeting' or any(w in msg_lower for w in ['مرحبا', 'hello', 'hi', 'اهلا', 'السلام']):
+        # ── 1. GREETING ──
+        if self.state.step == 'greeting':
             self.state.step = 'awaiting_nor'
-            return ('مرحباً بك في PS4 Repair Agent 🤖\n\n'
-                    'أنا هنا لمساعدتك في تشخيص مشاكل جهاز PS4 الخاص بك.\n\n'
-                    '📁 **الخطوة الأولى:** أرسل لي ملف NOR dump (32MB .BIN)\n'
-                    'أو أخبرني عن مشكلتك وسأوجهك.')
+            return ('<p>✨ Welcome to <strong>PS4 Repair Agent</strong> 🎮</p>'
+                    '<p>I help diagnose and repair NOR & Syscon dumps from PlayStation 4 consoles.</p>'
+                    '<p style="margin-top:10px">📁 <strong>Drop your NOR dump</strong> (32MB .BIN) above to get started,<br>'
+                    'or type a question about your console issue.</p>')
 
-        # No NOR yet
+        # ── 2. USER WANTS FIX WITHOUT FILES ──
+        wants_help = any(w in msg_lower for w in ['بلو', 'blue', 'اعطال', 'مشكلة', 'help', 'problem', 'fix', 'اعطاني'])
+        if self.state.nor_data is None and wants_help:
+            return ('<p>I can help diagnose a wide range of PS4 issues!</p>'
+                    '<p><strong>To begin, I need a NOR dump file</strong> 📁<br>'
+                    'Drop your <code>.BIN</code> file (32MB) in the upload area above.</p>'
+                    '<p style="color:var(--text-dim);font-size:0.88em">💡 You can also upload a Syscon dump (256KB/512KB) alongside it.</p>')
+
         if self.state.nor_data is None:
-            if 'نور' in msg or 'nor' in msg_lower or 'dump' in msg_lower or 'بلو' in msg or 'blue' in msg_lower:
-                return ('لتحليل المشكلة، أحتاج ملف NOR dump أولاً.\n\n'
-                        '📤 **اسحب ملف .BIN هنا** أو اضغط على زر الرفع.\n'
-                        'الملف عادة 32MB ويُقرأ من جهاز PS4 بأداة مثل SPIway.')
-            return ('أحتاج ملف NOR dump للبدء. 📁\n'
-                    'أرسل الملف عبر زر الرفع في الأسفل.')
+            return '<p>Please upload a <strong>NOR dump</strong> first 📁<br>Drag & drop or click the upload bar above.</p>'
 
-        # NOR loaded, check for syscon
-        if self.state.syscon_data is None:
-            needs_syscon = ('syscon' in msg_lower or 'سيسكون' in msg or
-                            'ار' in msg_lower.split() or 'arv' in msg_lower)
-            if needs_syscon or self.state.step == 'nor_loaded':
-                self.state.step = 'awaiting_syscon'
-                return (f'تم تحليل الـ NOR ✅\n\n'
-                        f'**الموديل:** {nor["sku"]}\n'
-                        f'**FW:** {nor["fw"]}\n'
-                        f'**Board ID:** {nor["board_id"]}\n'
-                        f'**Slot Active:** {nor["active_slot"]}\n\n'
-                        f'📁 **الآن أحتاج ملف Syscon أيضاً** (256KB أو 512KB)\n'
-                        f'للحصول على تشخيص دقيق.')
-
-            return (f'تم تحليل الـ NOR بنجاح ✅\n\n'
-                    f'**الموديل:** {nor["sku"]}\n'
-                    f'**FW:** {nor["fw"]}\n'
-                    f'**Board ID:** {nor["board_id"]}\n\n'
-                    f'📁 للمزيد من الدقة، أرسل ملف Syscon إن كان متوفراً.\n'
-                    f'أو اكتب "لا يوجد" أو "ماعندي" لاكمال التحليل بدون Syscon.')
-
-        # User says they don't have syscon
-        if self.state.nor_data and self.state.syscon_data is None and self.state.step == 'awaiting_syscon':
+        # ── 3. NOR LOADED — ASK FOR SYSCON ──
+        if self.state.syscon_data is None and self.state.step in ('nor_loaded', 'awaiting_syscon'):
+            self.state.step = 'awaiting_syscon'
             no_syscon = any(w in msg_lower for w in ['لا', 'ما عندي', 'لا يوجد', 'ليس معي', 'مش موجود',
-                                                      'no', 'dont have', "don't have", 'not available', 'without'])
+                                                      'no', "don't have", 'dont have', 'not available', 'without', 'بدون'])
             if no_syscon:
                 self.state.step = 'nor_only'
-                nor = self.state.nor_analysis
-                if not nor:
-                    return 'حسناً. سأكتفي بتحليل الـ NOR.'
-                errors_nor = [{'level': 'warn', 'title': 'MAC address erased',
-                               'detail': 'WiFi/Bluetooth will not function.'}]
+                diag = '<p>✅ <strong>NOR analysis complete (no Syscon):</strong></p>' + self._fmt_nor_card()
                 if not nor.get('healthy', True):
-                    errors_nor.append({'level': 'error', 'title': 'NOR header corrupt',
-                                       'detail': 'SCE header region has invalid data.'})
-                return (f'حسناً ✅ تم تحليل الـ NOR بدون Syscon.\n\n'
-                        f'**الموديل:** {nor["sku"]}\n'
-                        f'**FW:** {nor["fw"]}\n'
-                        f'**Board ID:** {nor["board_id"]}\n'
-                        f'**Active Slot:** {nor["active_slot"]}\n\n'
-                        f'📋 **ملاحظات:**\n'
-                        f'• بدون Syscon، لا يمكن تشخيص مشاكل المفاتيح (SSC/SSK)\n'
-                        f'• إذا كان الجهاز بلو لايت، قد يكون السبب في السيسكون\n'
-                        f'• إذا أرسلت السيسكون لاحقاً، يمكنني إكمال التشخيص.\n\n'
-                        f'هل لديك أي سؤال آخر؟')
+                    diag += '<p style="color:var(--orange);margin-top:8px">⚠️ SCE header region is sparse — the dump may be incomplete.</p>'
+                if nor.get('mac', '').startswith('ff:ff'):
+                    diag += '<p style="color:var(--orange)">⚠️ MAC is erased — WiFi/BT will not function.</p>'
+                diag += ('<p style="margin-top:10px">📌 <strong>Tip:</strong> For a full diagnosis (SSC/SSK keys, ARV, boot chain),'
+                         ' add a Syscon dump later.</p>'
+                         '<p>🤔 <strong>Do you have a Syscon dump you can share?</strong></p>'
+                         '<div class="confirm-group" onclick=\'window.dispatchEvent(new CustomEvent("confirm", {detail:"yes"}))\'>'
+                         '<button class="btn-confirm yes">✅ Yes, I have it</button>'
+                         '<button class="btn-confirm no" onclick=\'window.dispatchEvent(new CustomEvent("confirm", {detail:"no"}))\'>❌ No</button></div>')
+                return diag
 
-        # Both loaded — full analysis
-        if self.state.step in ('syscon_loaded', 'diagnosed'):
-            self.state.step = 'diagnosed'
+            return ('<p>✅ <strong>NOR loaded successfully!</strong></p>'
+                    + self._fmt_nor_card()
+                    + '<p style="margin-top:10px">📁 <strong>Do you have a Syscon dump?</strong> 🧩<br>'
+                    'Upload it for a complete diagnosis (ARV, SSC/SSK, severity).<br>'
+                    '<span style="color:var(--text-dim)">Or type <strong>"لا"</strong> / <strong>"no"</strong> to continue without.</span></p>'
+                    '<div class="confirm-group">'
+                    '<button class="btn-confirm yes" onclick="document.getElementById(\'fileInput\').click()">✅ Yes, upload</button>'
+                    '<button class="btn-confirm no" onclick=\'window.dispatchEvent(new CustomEvent("confirm", {detail:"no"}))\'>❌ No, continue</button></div>')
 
-            # Build diagnosis summary
-            errors = [d for d in self.state.diagnosis if d['level'] == 'error']
-            warns = [d for d in self.state.diagnosis if d['level'] == 'warn']
+        # ── 4. NOR ONLY — NO SYSCON ──
+        if self.state.step == 'nor_only':
+            diag = '<p>✅ <strong>NOR analysis:</strong></p>' + self._fmt_nor_card()
+            if nor.get('mac', '').startswith('ff:ff'):
+                diag += '<p style="color:var(--orange);margin-top:8px">⚠️ MAC erased — WiFi/BT disabled but console can boot.</p>'
+            return diag
 
-            intro = ('## 📊 التشخيص الكامل\n\n'
-                     f'**NOR:** {nor["sku"]} FW {nor["fw"]}\n'
-                     f'**Syscon:** ARV={sc.get("arv", "?")}, {sc.get("severity", "?")}\n'
-                     f'**الحالة:** {sc.get("entries", "?")} entries\n\n')
+        # ── 5. BOTH LOADED — FULL DIAGNOSTICS ──
+        self.state.step = 'diagnosed'
 
-            if errors:
-                for e in errors:
-                    intro += f'🔴 **{e["title"]}**\n{e["detail"]}\n\n'
-            if warns:
-                for w in warns:
-                    intro += f'🟡 **{w["title"]}**\n{w["detail"]}\n\n'
+        errors = [d for d in self.state.diagnosis if d['level'] == 'error']
+        warns = [d for d in self.state.diagnosis if d['level'] == 'warn']
 
-            # Suggestions
+        html = '<p>🎯 <strong>Full Diagnostics Report</strong></p>'
+        html += '<div class="stat-grid" style="margin-bottom:8px">'
+        html += _stat('📀 NOR', f'{_bold(nor["sku"])} FW {_bold(nor["fw"])}')
+        html += _stat('🧩 Syscon', f'ARV={sc.get("arv","?")}  {_badge(sc.get("severity","?").capitalize(), "warn" if sc.get("severity") in ("moderate","severe") else "ok")}')
+        html += _stat('📋 Entries', f'{sc.get("valid_entries","?")}  |  Chip {sc.get("chip","?")}')
+        html += '</div>'
+
+        if errors:
+            html += '<p style="margin:10px 0 6px"><strong style="color:var(--red)">🔴 Issues found:</strong></p>'
+            for e in errors:
+                html += f'<p style="padding:6px 10px;background:var(--red-bg);border-radius:8px;margin:4px 0">'
+                html += f'<strong style="color:var(--red)">{e["title"]}</strong><br>{e["detail"]}</p>'
+
+        if warns:
+            html += '<p style="margin:8px 0 4px"><strong style="color:var(--orange)">🟡 Notes:</strong></p>'
+            for w in warns:
+                html += f'<p style="padding:4px 0;color:var(--orange)">{w["detail"]}</p>'
+
+        # Suggestions
+        if sc:
             missing = sc.get('missing_types', [])
-            if missing:
-                intro += ('💡 **اقتراح:** السيسكون ناقص أنواع أساسية.\n'
-                          'أقدر أصلحه باستخدام donor مناسب. جرب الخيارات التالية:\n'
-                          '  1️⃣ **V1:** k368 donor (ARV=232)\n'
-                          '  2️⃣ **V2:** 77 donor (ARV=232 بديل)\n'
-                          '  3️⃣ **V3:** WeeTools rebuild نظيف\n'
-                          'أكتب "طبق V1" للبدء.\n\n')
+            if [t for t in missing if 0 <= t <= 7]:
+                html += ('<p style="margin-top:12px"><strong>💡 Suggested fixes:</strong></p>'
+                         '<div class="fix-buttons">'
+                         '<button class="btn-fix primary" onclick=\'window.dispatchEvent(new CustomEvent("fix", {detail:"V1"}))\'>V1 · k368 donor</button>'
+                         '<button class="btn-fix" onclick=\'window.dispatchEvent(new CustomEvent("fix", {detail:"V2"}))\'>V2 · 77 donor</button>'
+                         '<button class="btn-fix" onclick=\'window.dispatchEvent(new CustomEvent("fix", {detail:"V3"}))\'>V3 · WeeTools</button>'
+                         '</div>'
+                         '<p style="color:var(--text-dim);font-size:0.85em">Click a fix to download the repaired file.</p>')
 
-            if self.state.match_results:
-                intro += '**🎯 أفضل donor للتطابق:**\n'
-                for r in self.state.match_results[:3]:
-                    intro += f'  • {r["filename"]} (score={r["score"]})\n'
+        if self.state.match_results:
+            html += '<p style="margin-top:10px"><strong>🎯 Best donor match:</strong></p>'
+            for r in self.state.match_results[:3]:
+                if r['score'] >= 10:
+                    html += f'<p style="padding:2px 0">• {_bold(r["filename"])} <span style="color:var(--text-dim)">(score={r["score"]}, ARV={r.get("arv","?")})</span></p>'
 
-            # Handle fix requests
-            if 'v1' in msg_lower or 'k368' in msg_lower or 'طبق 1' in msg:
-                return self._apply_fix('V1', intro)
-            if 'v2' in msg_lower or '77' in msg_lower:
-                return self._apply_fix('V2', intro)
-            if 'v3' in msg_lower or 'wee' in msg_lower:
-                return self._apply_fix('V3', intro)
+        html += '<p style="margin-top:10px;color:var(--text-dim);font-size:0.85em">'
+        html += '💬 Ask me anything or click a fix button above.</p>'
+        return html
 
-            if re.search(r'\bشكرا\b|\bthanks\b|\bthank\b', msg_lower):
-                return ('على الرحب والسعة! 🌟\n\n'
-                        'إذا احتجت مساعدة أخرى، أنا هنا.\n\n'
-                        'ودعمك للـ PayPal محل تقدير: paypal.me/islamjamelak')
-
-            return intro
-
-        return ('أنا في انتظار تعليماتك. أرسل ملف NOR أو أخبرني عن مشكلتك.')
-
-    def _apply_fix(self, variant: str, current_diag: str) -> str:
-        import hashlib
-        out_dir = os.path.dirname(os.path.abspath(__file__))
-        out_dir = os.path.join(os.path.dirname(out_dir), 'dumps')
+    def _apply_fix(self, variant: str) -> str:
+        out_dir = os.path.join(ROOT, 'dumps')
         os.makedirs(out_dir, exist_ok=True)
-
         target = self.state.syscon_data
-        donor_map = {
-            'V1': 'k368-01.bin',
-            'V2': '77-01.bin',
-        }
+        if not target:
+            return '<p style="color:var(--red)">❌ No Syscon data to fix.</p>'
 
+        donor_map = {'V1': 'k368-01.bin', 'V2': '77-01.bin'}
         donor_file = donor_map.get(variant)
         if not donor_file:
-            return '❌ غير معروف. استخدم V1 أو V2.'
+            return '<p style="color:var(--red)">❌ Unknown variant.</p>'
 
         donor_path = os.path.join(SYSCON_DONORS_DIR, donor_file)
         if not os.path.exists(donor_path):
-            return f'❌ ملف {donor_file} غير موجود في syscon_donors/.'
+            return f'<p style="color:var(--orange)">⚠️ Donor {donor_file} not found in syscon_donors/.<br>Without it, using WeeTools rebuild only.</p>'
 
         donor = open(donor_path, 'rb').read()
-
-        # Parse entries
         def parse_entries(data):
             entries = {}
             for an in range(9):
@@ -247,11 +251,8 @@ class PS4ChatAgent:
                         if typ not in entries or ctr > entries[typ][0]:
                             entries[typ] = (ctr, raw)
             return entries
-
         te = parse_entries(target)
         de = parse_entries(donor)
-
-        # Merge
         merged = {}
         for typ in range(8):
             if typ in de: merged[typ] = de[typ]
@@ -259,18 +260,14 @@ class PS4ChatAgent:
             if typ not in merged: merged[typ] = val
         for typ in range(0x28, 0x2C):
             if typ not in merged and typ in de: merged[typ] = de[typ]
-
-        # Build output
         result = bytearray(target)
         result[0x60010:0x60080] = b'\xFF' * (0x60080 - 0x60010)
         result[0x60800:0x62000] = b'\xFF' * 0x1800
-
         for typ in sorted(merged.keys()):
             ctr, entry = merged[typ]
             fd_off = 0x60800 + typ * 8
             if fd_off + 8 <= len(result):
                 result[fd_off:fd_off + 8] = entry[8:16]
-
         for i, typ in enumerate(sorted(merged.keys()), 1):
             ctr, entry = merged[typ]
             entry_off = 0x60C00 + (i - 1) * 16
@@ -284,19 +281,17 @@ class PS4ChatAgent:
             result[entry_off + 6] = (i >> 16) & 0xFF
             result[entry_off + 7] = 0xC3
             result[entry_off + 8:entry_off + 16] = entry[8:16]
-
-        # Save
         md5 = hashlib.md5(target).hexdigest()[:8]
         out_path = os.path.join(out_dir, f'repaired_{variant}_{md5}.bin')
         with open(out_path, 'wb') as f:
             f.write(bytes(result))
 
-        return (f'✅ **تم تطبيق {variant} بنجاح!**\n\n'
-                f'**الملف:** {os.path.basename(out_path)}\n'
-                f'**المسار:** {out_path}\n\n'
-                f'📋 **الأنواع الموجودة الآن:** {len(merged)}\n'
-                f'🟢 الأنواع الأساسية (0x00-0x0B): موجودة ✅\n'
-                f'🟢 PRE0 (0x0C): موجود ✅\n'
-                f'🟢 FW records (0x28-0x2B): موجودة ✅\n\n'
-                f'جرب هذا الملف على جهازك.'
-                f'ودعمك للـ PayPal محل تقدير: paypal.me/islamjamelak')
+        return (f'<p style="color:var(--green)">✅ <strong>{variant} applied successfully!</strong></p>'
+                f'<p><strong>File:</strong> <code>{os.path.basename(out_path)}</code><br>'
+                f'<strong>Path:</strong> <code>{out_path}</code></p>'
+                f'<p>📋 <strong>Result:</strong> {len(merged)} entries<br>'
+                f'✅ Types 0x00-0x0B (base): Present<br>'
+                f'✅ PRE0 (0x0C): Present<br>'
+                f'✅ FW records (0x28-0x2B): Present</p>'
+                f'<p style="margin-top:10px;color:var(--text-dim)">🔌 Write this file to your Syscon chip and test the console.</p>'
+                f'<p>🙏 <a href="https://paypal.me/islamjamelak" target="_blank" style="color:var(--accent)">Support the project</a></p>')
