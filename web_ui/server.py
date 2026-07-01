@@ -1,9 +1,8 @@
 """
-PS4 Repair Agent — Local Web UI
-Run: python web_ui/server.py [port]
+PS4 Repair Agent — Local Web UI + Chat AI
 """
 
-import os, sys, json, tempfile, webbrowser
+import os, sys, json, webbrowser
 from flask import Flask, request, jsonify, render_template, send_from_directory
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -11,6 +10,16 @@ sys.path.insert(0, ROOT)
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024
+
+# Chat agent instance (one per server)
+_agent = None
+
+def get_agent():
+    global _agent
+    if _agent is None:
+        from .chat_agent import PS4ChatAgent
+        _agent = PS4ChatAgent()
+    return _agent
 
 def analyze_nor(data: bytes) -> dict:
     from ps4nor.utils.helpers import detect_sku, detect_fw_version, detect_active_slot
@@ -127,6 +136,21 @@ def analyze():
             'donors': match_results[:5] if match_results else [],
         },
     })
+
+@app.route('/chat', methods=['POST'])
+def chat():
+    msg = request.form.get('message', '')
+    files = {}
+    if 'nor' in request.files:
+        f = request.files['nor']
+        files[f.filename] = f.read()
+    if 'syscon' in request.files:
+        f = request.files['syscon']
+        files[f.filename] = f.read()
+
+    agent = get_agent()
+    result = agent.process_message(msg, files)
+    return jsonify(result)
 
 def main(port=5050):
     print(f'  PS4 Repair Agent — http://localhost:{port}')

@@ -19,58 +19,48 @@
     <div class="version">v2.2.1</div>
   </header>
 
-  <div class="drop-zone-container">
-    <div class="drop-zone" id="dropNor">
-      <div class="drop-icon">📀</div>
-      <div class="drop-text">
-        <strong>Drop NOR dump here</strong>
-        <span class="small">or click to browse (32MB .BIN)</span>
+  <div class="chat-container" id="chatContainer">
+    <div class="chat-messages" id="chatMessages">
+      <div class="msg msg-ai">
+        <div class="msg-avatar">🤖</div>
+        <div class="msg-content">
+          <p>مرحباً بك في <strong>PS4 Repair Agent</strong> 🎮</p>
+          <p>أنا هنا لمساعدتك في تشخيص مشاكل جهاز PS4 الخاص بك.</p>
+          <p>📁 أرسل لي ملف <strong>NOR dump</strong> (32MB .BIN) للبدء، أو أخبرني عن مشكلتك.</p>
+        </div>
       </div>
-      <div class="drop-status" id="norStatus"></div>
-    </div>
-    <div class="drop-zone" id="dropSyscon">
-      <div class="drop-icon">🧩</div>
-      <div class="drop-text">
-        <strong>Drop Syscon dump here</strong>
-        <span class="small">or click to browse (256KB/512KB .BIN)</span>
-      </div>
-      <div class="drop-status" id="sysconStatus"></div>
     </div>
   </div>
 
-  <div class="controls">
-    <button class="btn btn-primary" id="btnAnalyze" disabled>
-      <span class="btn-icon">🔍</span> Analyze
-    </button>
-  </div>
-
-  <div class="results" id="results" style="display:none">
-    <div class="result-card nor-card">
-      <div class="card-header">NOR Analysis</div>
-      <div class="card-body" id="norData"></div>
+  <div class="upload-area" id="uploadArea">
+    <div class="upload-row">
+      <span class="upload-label">📀 NOR:</span>
+      <span class="upload-status" id="norStatus">لم يتم الرفع</span>
     </div>
-    <div class="result-card syscon-card">
-      <div class="card-header">Syscon Analysis</div>
-      <div class="card-body" id="sysconData"></div>
-    </div>
-    <div class="result-card diagnosis-card">
-      <div class="card-header">🧠 AI Diagnostics</div>
-      <div class="card-body" id="diagnosisData"></div>
-    </div>
-    <div class="result-card match-card">
-      <div class="card-header">🎯 Syscon-NOR Match</div>
-      <div class="card-body" id="matchData"></div>
+    <div class="upload-row">
+      <span class="upload-label">🧩 Syscon:</span>
+      <span class="upload-status" id="sysconStatus">لم يتم الرفع</span>
     </div>
   </div>
 
-  <div class="loading" id="loading" style="display:none">
-    <div class="spinner"></div>
-    <p>Analyzing...</p>
+  <div class="input-area">
+    <input type="file" id="fileInput" multiple style="display:none" accept=".bin,.BIN">
+    <div class="input-row">
+      <input type="text" class="chat-input" id="chatInput"
+             placeholder="اكتب رسالتك هنا... أو اسحب ملفات للتحليل"
+             autofocus>
+      <button class="btn-send" id="btnSend">➤</button>
+    </div>
+    <div class="input-hints">
+      <span class="hint" data-msg="سلام">👋 مرحبا</span>
+      <span class="hint" data-msg="ما سبب البلوتوث؟">📡 بلوتوث</span>
+      <span class="hint" data-msg="كيف أصلح البلوليت؟">🔵 بلو لايت</span>
+      <span class="hint" data-msg="شكرا">❤️ شكرا</span>
+    </div>
   </div>
 
   <footer>
-    <p>by <strong>ISLAMGAZA</strong> &mdash; <a href="https://github.com/ISLAMGAZA/PS4_NOR_Validator_Pro_v2" target="_blank">GitHub</a></p>
-    <p class="small"><a href="https://paypal.me/islamjamelak" target="_blank">Support the project</a></p>
+    <p>by <strong>ISLAMGAZA</strong> &mdash; <a href="https://github.com/ISLAMGAZA/PS4_NOR_Validator_Pro_v2" target="_blank">GitHub</a> &mdash; <a href="https://paypal.me/islamjamelak" target="_blank">﷽</a></p>
   </footer>
 </div>
 

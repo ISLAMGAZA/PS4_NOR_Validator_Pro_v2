@@ -2052,7 +2052,15 @@ if __name__ == '__main__':
         for d in [DUMPS_DIR, DONORS_DIR, FWS_DIR, REVERT_DIR, SYSCON_DONORS_DIR]:
             os.makedirs(d, exist_ok=True)
 
-        if '--web' in sys.argv:
+        if '--cli' in sys.argv:
+            if len(sys.argv) > 2 and sys.argv[2] != '-i':
+                cli_mode(sys.argv[2:])
+            else:
+                if len(sys.argv) > 2:
+                    _current_path = sys.argv[2]
+                    _load_dump(sys.argv[2])
+                main_menu()
+        else:
             from web_ui.server import main as web_main
             port = 5050
             if '--port' in sys.argv:
@@ -2060,13 +2068,6 @@ if __name__ == '__main__':
                 if idx + 1 < len(sys.argv):
                     port = int(sys.argv[idx + 1])
             web_main(port)
-        elif len(sys.argv) > 1 and sys.argv[1] != '-i':
-            cli_mode(sys.argv[1:])
-        else:
-            if len(sys.argv) > 2:
-                _current_path = sys.argv[2]
-                _load_dump(sys.argv[2])
-            main_menu()
     except Exception as e:
         import traceback
         print(f'\n  ERROR: {e}')
