@@ -11,14 +11,13 @@ sys.path.insert(0, ROOT)
 app = Flask(__name__, template_folder='templates', static_folder='static')
 app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024
 
-# Chat agent instance (one per server)
 _agent = None
 
 def get_agent():
     global _agent
     if _agent is None:
-        from .chat_agent import PS4ChatAgent
-        _agent = PS4ChatAgent()
+        from .llm_agent import LLMAgent
+        _agent = LLMAgent()
     return _agent
 
 def analyze_nor(data: bytes) -> dict:
@@ -149,16 +148,14 @@ def chat():
         files[f.filename] = f.read()
 
     agent = get_agent()
-    result = agent.process_message(msg, files)
+    result = agent.process(msg, files)
     return jsonify(result)
 
 @app.route('/fix', methods=['POST'])
 def fix():
     variant = request.json.get('variant', 'V1')
     agent = get_agent()
-    if agent.state.syscon_data is None:
-        return jsonify({'response': '<p style="color:var(--red)">❌ No Syscon data loaded.</p>'})
-    result = agent._apply_fix(variant)
+    result = agent._execute_fix(variant)
     return jsonify({'response': result})
 
 def main(port=5050):
