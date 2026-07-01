@@ -130,7 +130,33 @@ class PS4ChatAgent:
                     f'**الموديل:** {nor["sku"]}\n'
                     f'**FW:** {nor["fw"]}\n'
                     f'**Board ID:** {nor["board_id"]}\n\n'
-                    f'📁 للمزيد من الدقة، أرسل ملف Syscon إن كان متوفراً.')
+                    f'📁 للمزيد من الدقة، أرسل ملف Syscon إن كان متوفراً.\n'
+                    f'أو اكتب "لا يوجد" أو "ماعندي" لاكمال التحليل بدون Syscon.')
+
+        # User says they don't have syscon
+        if self.state.nor_data and self.state.syscon_data is None and self.state.step == 'awaiting_syscon':
+            no_syscon = any(w in msg_lower for w in ['لا', 'ما عندي', 'لا يوجد', 'ليس معي', 'مش موجود',
+                                                      'no', 'dont have', "don't have", 'not available', 'without'])
+            if no_syscon:
+                self.state.step = 'nor_only'
+                nor = self.state.nor_analysis
+                if not nor:
+                    return 'حسناً. سأكتفي بتحليل الـ NOR.'
+                errors_nor = [{'level': 'warn', 'title': 'MAC address erased',
+                               'detail': 'WiFi/Bluetooth will not function.'}]
+                if not nor.get('healthy', True):
+                    errors_nor.append({'level': 'error', 'title': 'NOR header corrupt',
+                                       'detail': 'SCE header region has invalid data.'})
+                return (f'حسناً ✅ تم تحليل الـ NOR بدون Syscon.\n\n'
+                        f'**الموديل:** {nor["sku"]}\n'
+                        f'**FW:** {nor["fw"]}\n'
+                        f'**Board ID:** {nor["board_id"]}\n'
+                        f'**Active Slot:** {nor["active_slot"]}\n\n'
+                        f'📋 **ملاحظات:**\n'
+                        f'• بدون Syscon، لا يمكن تشخيص مشاكل المفاتيح (SSC/SSK)\n'
+                        f'• إذا كان الجهاز بلو لايت، قد يكون السبب في السيسكون\n'
+                        f'• إذا أرسلت السيسكون لاحقاً، يمكنني إكمال التشخيص.\n\n'
+                        f'هل لديك أي سؤال آخر؟')
 
         # Both loaded — full analysis
         if self.state.step in ('syscon_loaded', 'diagnosed'):
