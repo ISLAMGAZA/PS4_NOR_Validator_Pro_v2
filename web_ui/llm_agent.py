@@ -187,7 +187,10 @@ class LLMAgent:
         # Refresh ollama check
         self.ollama._check()
 
-        if self.ollama.available and self.ollama.model_ready:
+        # Always analyze files immediately if uploaded
+        if files:
+            response = self._fallback_analysis(msg, files)
+        elif self.ollama.available and self.ollama.model_ready:
             response = self._llm_chat(msg)
             fix_match = re.search(r'FIX:(\w+)', response)
             if fix_match:
