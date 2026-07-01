@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PS4 Repair Agent</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="logo">
+      <span class="logo-icon">⚡</span>
+      <div>
+        <h1>PS4 <span class="accent">Repair Agent</span></h1>
+        <p class="subtitle">AI-Assisted NOR & Syscon Diagnostics</p>
+      </div>
+    </div>
+    <div class="version">v2.2.1</div>
+  </header>
+
+  <div class="drop-zone-container">
+    <div class="drop-zone" id="dropNor">
+      <div class="drop-icon">📀</div>
+      <div class="drop-text">
+        <strong>Drop NOR dump here</strong>
+        <span class="small">or click to browse (32MB .BIN)</span>
+      </div>
+      <div class="drop-status" id="norStatus"></div>
+    </div>
+    <div class="drop-zone" id="dropSyscon">
+      <div class="drop-icon">🧩</div>
+      <div class="drop-text">
+        <strong>Drop Syscon dump here</strong>
+        <span class="small">or click to browse (256KB/512KB .BIN)</span>
+      </div>
+      <div class="drop-status" id="sysconStatus"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn btn-primary" id="btnAnalyze" disabled>
+      <span class="btn-icon">🔍</span> Analyze
+    </button>
+  </div>
+
+  <div class="results" id="results" style="display:none">
+    <div class="result-card nor-card">
+      <div class="card-header">NOR Analysis</div>
+      <div class="card-body" id="norData"></div>
+    </div>
+    <div class="result-card syscon-card">
+      <div class="card-header">Syscon Analysis</div>
+      <div class="card-body" id="sysconData"></div>
+    </div>
+    <div class="result-card diagnosis-card">
+      <div class="card-header">🧠 AI Diagnostics</div>
+      <div class="card-body" id="diagnosisData"></div>
+    </div>
+    <div class="result-card match-card">
+      <div class="card-header">🎯 Syscon-NOR Match</div>
+      <div class="card-body" id="matchData"></div>
+    </div>
+  </div>
+
+  <div class="loading" id="loading" style="display:none">
+    <div class="spinner"></div>
+    <p>Analyzing...</p>
+  </div>
+
+  <footer>
+    <p>by <strong>ISLAMGAZA</strong> &mdash; <a href="https://github.com/ISLAMGAZA/PS4_NOR_Validator_Pro_v2" target="_blank">GitHub</a></p>
+    <p class="small"><a href="https://paypal.me/islamjamelak" target="_blank">Support the project</a></p>
+  </footer>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

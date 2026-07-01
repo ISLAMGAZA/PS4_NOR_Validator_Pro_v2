@@ -2048,7 +2048,19 @@ def cli_mode(args: list):
 
 if __name__ == '__main__':
     try:
-        if len(sys.argv) > 1 and sys.argv[1] != '-i':
+        # Ensure required directories exist
+        for d in [DUMPS_DIR, DONORS_DIR, FWS_DIR, REVERT_DIR, SYSCON_DONORS_DIR]:
+            os.makedirs(d, exist_ok=True)
+
+        if '--web' in sys.argv:
+            from web_ui.server import main as web_main
+            port = 5050
+            if '--port' in sys.argv:
+                idx = sys.argv.index('--port')
+                if idx + 1 < len(sys.argv):
+                    port = int(sys.argv[idx + 1])
+            web_main(port)
+        elif len(sys.argv) > 1 and sys.argv[1] != '-i':
             cli_mode(sys.argv[1:])
         else:
             if len(sys.argv) > 2:
