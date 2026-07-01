@@ -141,6 +141,12 @@ If you find this tool useful, consider supporting development:
 
 Your support helps maintain servers, acquire test dumps, and improve the tool.
 
+---
+
+### 🎮 Looking for a simpler interface?
+
+Check out **[PS4 Repair Agent](https://github.com/ISLAMGAZA/PS4_Repair_Agent)** — AI-powered chat interface with auto-setup, drag-drop file upload, and one-click repairs. Same engine, simpler UI. Suitable for beginners and advanced users alike.
+
 ## License
 
 **GPL-3.0** — Open source. Contributions welcome.
