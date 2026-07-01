@@ -151,6 +151,11 @@ def chat():
     result = agent.process(msg, files)
     return jsonify(result)
 
+@app.route('/setup-status')
+def setup_status():
+    agent = get_agent()
+    return jsonify({'status': agent.get_setup_status()})
+
 @app.route('/fix', methods=['POST'])
 def fix():
     variant = request.json.get('variant', 'V1')

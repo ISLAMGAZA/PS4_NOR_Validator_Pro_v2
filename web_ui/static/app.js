@@ -5,6 +5,26 @@ const fileInput = document.getElementById('fileInput');
 const uploadBar = document.getElementById('uploadBar');
 const norUpload = document.getElementById('norUpload');
 const sysconUpload = document.getElementById('sysconUpload');
+const setupBadge = document.getElementById('setupBadge');
+
+// ── POLL SETUP STATUS ──
+async function pollSetup() {
+  try {
+    const r = await fetch('/setup-status');
+    const d = await r.json();
+    if (d.status) {
+      const parts = d.status.split(':');
+      const status = parts[0];
+      const msg = parts.slice(1).join(':');
+      const icons = {ready:'✅',downloading:'⬇️',installing:'⚙️',pulling:'📦',waiting:'⏳',error:'❌',checking:'🔄'};
+      const icon = icons[status] || '🔄';
+      setupBadge.textContent = icon + ' ' + (msg || status);
+      setupBadge.className = 'header-badge ' + (status === 'ready' ? 'ready' : 'busy');
+    }
+  } catch(e) {}
+}
+setInterval(pollSetup, 3000);
+pollSetup();
 
 let pendingFiles = {};
 
